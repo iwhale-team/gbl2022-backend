@@ -58,7 +58,7 @@ func GetRouter() *gin.Engine {
 		user := api.Group("/user")
 		{
 			user.GET("/:user_id/total_score", GetUserTotalScoreRouter)
-			user.GET("/exist", CheckUserExistRouter)
+			user.GET("/:user_id/exist", CheckUserExistRouter)
 
 			user.POST("/", RegisterUserRouter)
 		}
