@@ -1,5 +1,5 @@
-## GBL2022-Backend
+# GBL2022-Backend
 
-# TODO
+## TODO
 - Dockerizing
 - Frontend with React
