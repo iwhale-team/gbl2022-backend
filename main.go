@@ -55,6 +55,13 @@ type BoothVideo struct {
 	URL     string `json:"url"`
 }
 
+type BoothBook struct {
+	ID      int    `json:"id"`
+	BoothID int    `json:"booth_id"`
+	UserID  string `json:"user_id"`
+	Period  int    `json:"period"`
+}
+
 type Score struct {
 	ID        int    `json:"id"`
 	UserID    string `json:"user_id"`
@@ -88,6 +95,15 @@ func GetRouter() *gin.Engine {
 			booth.POST("/edit", EditBoothRouter)
 			booth.POST("/image", NewBoothImageRouter)
 			booth.POST("/video", NewBoothVideoRouter)
+
+			book := booth.Group("/book")
+			{
+				book.POST("/:booth_id/:period", NewBoothBookRouter)
+				book.GET("/:booth_id", GetBoothBooksRouter)
+				book.GET("/:booth_id/:period", GetBoothBookRouter)
+				book.GET("/u/:user_id", GetUserBooksRouter)
+				book.DELETE("/:booth_id/:period", DeleteBoothBookRouter)
+			}
 		}
 
 		subject := api.Group("/subject")
@@ -120,6 +136,8 @@ func SetupDatabase() {
 	db.Exec("CREATE TABLE IF NOT EXISTS booths (id INTEGER PRIMARY KEY, name TEXT, content TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS scores (id INTEGER PRIMARY KEY, user_id TEXT, booth_id INTEGER, score INTEGER, created_at TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS booth_images (id INTEGER PRIMARY KEY, booth_id INTEGER, image TEXT)")
+	db.Exec("CREATE TABLE IF NOT EXISTS booth_videos (id INTEGER PRIMARY KEY, booth_id INTEGER, url TEXT)")
+	db.Exec("CREATE TABLE IF NOT EXISTS booth_books (id INTEGER PRIMARY KEY, booth_id INTEGER, user_id TEXT, period INTEGER)")
 }
 
 func GetBoothVideosRouter(c *gin.Context) {
@@ -318,6 +336,84 @@ func GetSubjectsRouter(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{"subjects": subjects})
+}
+
+func NewBoothBookRouter(c *gin.Context) {
+	boothID := c.Param("booth_id")
+	period := c.Param("period")
+
+	type data struct {
+		userID string `json:"user_id"`
+	}
+
+	var userID string
+	c.BindJSON(&data{userID: userID})
+
+	db.Exec("INSERT INTO booth_books (booth_id, user_id, period) VALUES (?, ?, ?)", boothID, userID, period)
+
+	c.JSON(200, gin.H{"id": userID})
+}
+
+func GetBoothBooksRouter(c *gin.Context) {
+	boothID := c.Param("booth_id")
+
+	rows, _ := db.Query("SELECT * FROM booth_books WHERE booth_id = ?", boothID)
+
+	var boothBooks []BoothBook
+	for rows.Next() {
+		var boothBook BoothBook
+		rows.Scan(&boothBook.ID, &boothBook.BoothID, &boothBook.UserID, &boothBook.Period)
+		boothBooks = append(boothBooks, boothBook)
+	}
+
+	c.JSON(200, gin.H{"booth_books": boothBooks})
+}
+
+func GetBoothBookRouter(c *gin.Context) {
+	boothID := c.Param("booth_id")
+	period := c.Param("period")
+
+	rows, _ := db.Query("SELECT * FROM booth_books WHERE booth_id = ? AND period = ?", boothID, period)
+
+	var boothBooks []BoothBook
+	for rows.Next() {
+		var boothBook BoothBook
+		rows.Scan(&boothBook.ID, &boothBook.BoothID, &boothBook.UserID, &boothBook.Period)
+		boothBooks = append(boothBooks, boothBook)
+	}
+
+	c.JSON(200, gin.H{"booth_books": boothBooks})
+}
+
+func GetUserBooksRouter(c *gin.Context) {
+	userID := c.Param("user_id")
+
+	rows, _ := db.Query("SELECT * FROM booth_books WHERE user_id = ?", userID)
+
+	var boothBooks []BoothBook
+	for rows.Next() {
+		var boothBook BoothBook
+		rows.Scan(&boothBook.ID, &boothBook.BoothID, &boothBook.UserID, &boothBook.Period)
+		boothBooks = append(boothBooks, boothBook)
+	}
+
+	c.JSON(200, gin.H{"booth_books": boothBooks})
+}
+
+func DeleteBoothBookRouter(c *gin.Context) {
+	boothID := c.Param("booth_id")
+	period := c.Param("period")
+
+	type data struct {
+		userID string `json:"user_id"`
+	}
+
+	var userID string
+	c.BindJSON(&data{userID: userID})
+
+	db.Exec("DELETE FROM booth_books WHERE booth_id = ? AND period = ? AND user_id = ?", boothID, period, userID)
+
+	c.JSON(200, gin.H{"id": boothID})
 }
 
 func main() {
