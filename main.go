@@ -70,6 +70,10 @@ type Score struct {
 	CreatedAt string `json:"created_at"`
 }
 
+type BoothBookUser struct {
+	userID string `json:"user_id"`
+}
+
 func GetRouter() *gin.Engine {
 	router := gin.Default()
 	router.Use(cors.Default())
@@ -342,12 +346,9 @@ func NewBoothBookRouter(c *gin.Context) {
 	boothID := c.Param("booth_id")
 	period := c.Param("period")
 
-	type data struct {
-		userID string `json:"user_id"`
-	}
-
-	var userID string
-	c.BindJSON(&data{userID: userID})
+	var respData BoothBookUser
+	c.BindJSON(&respData)
+	userID := respData.userID
 
 	db.Exec("INSERT INTO booth_books (booth_id, user_id, period) VALUES (?, ?, ?)", boothID, userID, period)
 
@@ -404,12 +405,9 @@ func DeleteBoothBookRouter(c *gin.Context) {
 	boothID := c.Param("booth_id")
 	period := c.Param("period")
 
-	type data struct {
-		userID string `json:"user_id"`
-	}
-
-	var userID string
-	c.BindJSON(&data{userID: userID})
+	var respData BoothBookUser
+	c.BindJSON(&respData)
+	userID := respData.userID
 
 	db.Exec("DELETE FROM booth_books WHERE booth_id = ? AND period = ? AND user_id = ?", boothID, period, userID)
 
