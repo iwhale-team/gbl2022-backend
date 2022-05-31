@@ -40,6 +40,7 @@ type Booth struct {
 	ID           int    `json:"id"`
 	Name         string `json:"name"`
 	Content      string `json:"content"`
+	Congestion   int    `json:"congestion"`
 	PlayingUsers []User `json:"playing_users"`
 }
 
@@ -100,6 +101,12 @@ func GetRouter() *gin.Engine {
 			booth.POST("/image", NewBoothImageRouter)
 			booth.POST("/video", NewBoothVideoRouter)
 
+			congestion := booth.Group("/congestion")
+			{
+				congestion.GET("/:booth_id", GetBoothCongestionRouter)
+				congestion.POST("/:booth_id", UpdateBoothCongestionRouter)
+			}
+
 			book := booth.Group("/book")
 			{
 				book.POST("/:booth_id/:period", NewBoothBookRouter)
@@ -138,7 +145,7 @@ func SetupDatabase() {
 	db.Exec("CREATE TABLE IF NOT EXISTS users (id TEXT, username TEXT, password TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS subjects (id INTEGER PRIMARY KEY, name TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS user_subjects (user_id TEXT, subject_id INTEGER)")
-	db.Exec("CREATE TABLE IF NOT EXISTS booths (id INTEGER PRIMARY KEY, name TEXT, content TEXT)")
+	db.Exec("CREATE TABLE IF NOT EXISTS booths (id INTEGER PRIMARY KEY, name TEXT, content TEXT, congestion INTEGER)")
 	db.Exec("CREATE TABLE IF NOT EXISTS scores (id INTEGER PRIMARY KEY, user_id TEXT, booth_id INTEGER, score INTEGER, created_at TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS booth_images (id INTEGER PRIMARY KEY, booth_id INTEGER, image TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS booth_videos (id INTEGER PRIMARY KEY, booth_id INTEGER, url TEXT)")
@@ -289,7 +296,7 @@ func NewBoothRouter(c *gin.Context) {
 	var booth Booth
 	c.BindJSON(&booth)
 
-	db.Exec("INSERT INTO booths (name, content) VALUES (?, ?)", booth.Name, booth.Content)
+	db.Exec("INSERT INTO booths (name, content, congestion) VALUES (?, ?, ?)", booth.Name, booth.Content, booth.Congestion)
 
 	c.JSON(200, gin.H{"id": booth.ID})
 }
@@ -298,7 +305,7 @@ func EditBoothRouter(c *gin.Context) {
 	var booth Booth
 	c.BindJSON(&booth)
 
-	db.Exec("UPDATE booths SET name = ?, content = ? WHERE id = ?", booth.Name, booth.Content, booth.ID)
+	db.Exec("UPDATE booths SET name = ?, content = ?, congestion = ? WHERE id = ?", booth.Name, booth.Content, booth.Congestion, booth.ID)
 
 	c.JSON(200, gin.H{"id": booth.ID})
 }
@@ -415,29 +422,54 @@ func DeleteBoothBookRouter(c *gin.Context) {
 	c.JSON(200, gin.H{"id": boothID})
 }
 
-func GetAllUsersScore() (map[string]int, error) {
-	rows, _ := db.Query("SELECT id FROM users")
-
+func GetAllUsersScore() map[string]int {
 	userScores := make(map[string]int)
+
+	rows, _ := db.Query("SELECT user_id, SUM(score) FROM scores GROUP BY user_id")
+
 	for rows.Next() {
 		var userID string
-		rows.Scan(&userID)
-		scores := GetUserScores(userID)
-
 		var score int
-		for _, s := range scores {
-			score += s.Score
-		}
+		rows.Scan(&userID, &score)
 		userScores[userID] = score
 	}
 
-	return userScores, nil
+	return userScores
 }
 
 func GetAllUsersScoreRouter(c *gin.Context) {
-	userScores, _ := GetAllUsersScore()
+	userScores := GetAllUsersScore()
 
 	c.JSON(200, gin.H{"user_scores": userScores})
+}
+
+func GetBoothCongestionRouter(c *gin.Context) {
+	boothID := c.Param("booth_id")
+
+	rows, _ := db.Query("SELECT congestion FROM booths WHERE id = ?", boothID)
+
+	var congestion int
+	for rows.Next() {
+		rows.Scan(&congestion)
+	}
+
+	c.JSON(200, gin.H{"congestion": congestion})
+}
+
+func UpdateBoothCongestionRouter(c *gin.Context) {
+	boothID := c.Param("booth_id")
+
+	type BoothCongestion struct {
+		Congestion int `json:"congestion"`
+	}
+
+	var respData BoothCongestion
+	c.BindJSON(&respData)
+	congestion := respData.Congestion
+
+	db.Exec("UPDATE booths SET congestion = ? WHERE id = ?", congestion, boothID)
+
+	c.JSON(200, gin.H{"id": boothID})
 }
 
 func main() {
