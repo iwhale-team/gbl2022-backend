@@ -416,7 +416,7 @@ func DeleteBoothBookRouter(c *gin.Context) {
 }
 
 func GetAllUsersScore() (map[string]int, error) {
-	rows, _ := db.Query("SELECT user_id FROM users")
+	rows, _ := db.Query("SELECT id FROM users")
 
 	userScores := make(map[string]int)
 	for rows.Next() {
