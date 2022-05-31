@@ -71,7 +71,7 @@ type Score struct {
 }
 
 type BoothBookUser struct {
-	userID string `json:"user_id"`
+	UserID string `json:"user_id"`
 }
 
 func GetRouter() *gin.Engine {
@@ -121,6 +121,7 @@ func GetRouter() *gin.Engine {
 		score := api.Group("/score")
 		{
 			score.POST("/", NewScoreRouter)
+			score.GET("/", GetAllUsersScoreRouter)
 			score.GET("/:user_id", GetUserScoresRouter)
 			score.GET("/:user_id/total_score", GetUserTotalScoreRouter)
 		}
@@ -348,7 +349,7 @@ func NewBoothBookRouter(c *gin.Context) {
 
 	var respData BoothBookUser
 	c.BindJSON(&respData)
-	userID := respData.userID
+	userID := respData.UserID
 
 	db.Exec("INSERT INTO booth_books (booth_id, user_id, period) VALUES (?, ?, ?)", boothID, userID, period)
 
@@ -407,11 +408,36 @@ func DeleteBoothBookRouter(c *gin.Context) {
 
 	var respData BoothBookUser
 	c.BindJSON(&respData)
-	userID := respData.userID
+	userID := respData.UserID
 
 	db.Exec("DELETE FROM booth_books WHERE booth_id = ? AND period = ? AND user_id = ?", boothID, period, userID)
 
 	c.JSON(200, gin.H{"id": boothID})
+}
+
+func GetAllUsersScore() (map[string]int, error) {
+	rows, _ := db.Query("SELECT user_id FROM users")
+
+	userScores := make(map[string]int)
+	for rows.Next() {
+		var userID string
+		rows.Scan(&userID)
+		scores := GetUserScores(userID)
+
+		var score int
+		for _, s := range scores {
+			score += s.Score
+		}
+		userScores[userID] = score
+	}
+
+	return userScores, nil
+}
+
+func GetAllUsersScoreRouter(c *gin.Context) {
+	userScores, _ := GetAllUsersScore()
+
+	c.JSON(200, gin.H{"user_scores": userScores})
 }
 
 func main() {
