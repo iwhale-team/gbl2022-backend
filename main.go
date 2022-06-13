@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"time"
@@ -46,8 +47,8 @@ type Booth struct {
 }
 
 type BoothPassword struct {
-	ID 	 int 	`json:"id"`
-	Password string `json:"string"`
+	ID       int    `json:"id"`
+	Password string `json:"password"`
 }
 
 type BoothImage struct {
@@ -108,6 +109,8 @@ func GetRouter() *gin.Engine {
 			booth.POST("/image", NewBoothImageRouter)
 			booth.POST("/video", NewBoothVideoRouter)
 
+			booth.POST("/auth", AuthBoothPasswordRouter)
+
 			congestion := booth.Group("/congestion")
 			{
 				congestion.GET("/:booth_id", GetBoothCongestionRouter)
@@ -153,10 +156,36 @@ func SetupDatabase() {
 	db.Exec("CREATE TABLE IF NOT EXISTS subjects (id INTEGER PRIMARY KEY, name TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS user_subjects (user_id TEXT, subject_id INTEGER)")
 	db.Exec("CREATE TABLE IF NOT EXISTS booths (id INTEGER PRIMARY KEY, name TEXT, content TEXT, congestion INTEGER)")
+	db.Exec("CREATE TABLE IF NOT EXISTS booth_passwords (id INTEGER, password TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS scores (id INTEGER PRIMARY KEY, user_id TEXT, booth_id INTEGER, score INTEGER, created_at TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS booth_images (id INTEGER PRIMARY KEY, booth_id INTEGER, image TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS booth_videos (id INTEGER PRIMARY KEY, booth_id INTEGER, url TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS booth_books (id INTEGER PRIMARY KEY, booth_id INTEGER, user_id TEXT, period INTEGER)")
+}
+
+func AuthBoothPasswordRouter(c *gin.Context) {
+	var boothPassword BoothPassword
+	if err := c.ShouldBindJSON(&boothPassword); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	rows, err := db.Query("SELECT id FROM booth_passwords WHERE password = ?", boothPassword.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	var id int
+	for rows.Next() {
+		rows.Scan(&id)
+	}
+	if id == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid password"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"id": id})
 }
 
 func GetUserInformationRouter(c *gin.Context) {
@@ -313,11 +342,21 @@ func GetUserSubjectsRouter(c *gin.Context) {
 	c.JSON(200, gin.H{"subjects": userSubject.Subjects})
 }
 
+func GenerateRandomString(n int) string {
+	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
+
 func NewBoothRouter(c *gin.Context) {
 	var booth Booth
 	c.BindJSON(&booth)
 
 	db.Exec("INSERT INTO booths (name, content, congestion) VALUES (?, ?, ?)", booth.Name, booth.Content, booth.Congestion)
+	db.Exec("INSERT INTO booth_passwords (booth_id, password) VALUES (?, ?)", booth.ID, GenerateRandomString(10))
 
 	c.JSON(200, gin.H{"id": booth.ID})
 }
@@ -509,6 +548,8 @@ func UpdateBoothCongestionRouter(c *gin.Context) {
 }
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
+
 	SetupDatabase()
 
 	router := GetRouter()
