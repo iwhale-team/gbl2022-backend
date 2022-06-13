@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -83,6 +84,7 @@ func GetRouter() *gin.Engine {
 	{
 		user := api.Group("/user")
 		{
+			user.GET("/:user_id", GetUserInformationRouter)
 			user.GET("/:user_id/total_score", GetUserTotalScoreRouter)
 			user.GET("/:user_id/exist", CheckUserExistRouter)
 
@@ -113,7 +115,7 @@ func GetRouter() *gin.Engine {
 				book.GET("/:booth_id", GetBoothBooksRouter)
 				book.GET("/:booth_id/:period", GetBoothBookRouter)
 				book.GET("/u/:user_id", GetUserBooksRouter)
-				book.DELETE("/:booth_id/:period", DeleteBoothBookRouter)
+				book.POST("/d/:booth_id/:period", DeleteBoothBookRouter)
 			}
 		}
 
@@ -150,6 +152,20 @@ func SetupDatabase() {
 	db.Exec("CREATE TABLE IF NOT EXISTS booth_images (id INTEGER PRIMARY KEY, booth_id INTEGER, image TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS booth_videos (id INTEGER PRIMARY KEY, booth_id INTEGER, url TEXT)")
 	db.Exec("CREATE TABLE IF NOT EXISTS booth_books (id INTEGER PRIMARY KEY, booth_id INTEGER, user_id TEXT, period INTEGER)")
+}
+
+func GetUserInformationRouter(c *gin.Context) {
+	userID := c.Param("user_id")
+	user := GetUserInformation(userID)
+
+	c.JSON(http.StatusOK, gin.H{"user": user})
+}
+
+func GetUserInformation(userID string) User {
+	var user User
+	db.QueryRow("SELECT id, username FROM users WHERE id = ?", userID).Scan(&user.ID, &user.Username)
+
+	return user
 }
 
 func GetBoothVideosRouter(c *gin.Context) {
@@ -318,7 +334,7 @@ func GetBoothRouter(c *gin.Context) {
 
 	var booth Booth
 	for rows.Next() {
-		rows.Scan(&booth.ID, &booth.Name, &booth.Content)
+		rows.Scan(&booth.ID, &booth.Name, &booth.Content, &booth.Congestion)
 	}
 
 	c.JSON(200, gin.H{"booth": booth})
@@ -330,7 +346,7 @@ func GetBoothsRouter(c *gin.Context) {
 	var booths []Booth
 	for rows.Next() {
 		var booth Booth
-		rows.Scan(&booth.ID, &booth.Name, &booth.Content)
+		rows.Scan(&booth.ID, &booth.Name, &booth.Content, &booth.Congestion)
 		booths = append(booths, booth)
 	}
 
@@ -350,13 +366,28 @@ func GetSubjectsRouter(c *gin.Context) {
 	c.JSON(200, gin.H{"subjects": subjects})
 }
 
+func BookingAlreadyExist(boothID, period int) bool {
+	var exist bool
+	db.QueryRow("SELECT EXISTS(SELECT * FROM booth_books WHERE booth_id = ? AND period = ?)", boothID, period).Scan(&exist)
+
+	return exist
+}
+
 func NewBoothBookRouter(c *gin.Context) {
 	boothID := c.Param("booth_id")
 	period := c.Param("period")
 
+	boothIDInt, _ := strconv.Atoi(boothID)
+	periodInt, _ := strconv.Atoi(period)
+
 	var respData BoothBookUser
 	c.BindJSON(&respData)
 	userID := respData.UserID
+
+	if BookingAlreadyExist(boothIDInt, periodInt) {
+		c.JSON(200, "Already booked")
+		return
+	}
 
 	db.Exec("INSERT INTO booth_books (booth_id, user_id, period) VALUES (?, ?, ?)", boothID, userID, period)
 
