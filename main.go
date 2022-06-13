@@ -45,6 +45,11 @@ type Booth struct {
 	PlayingUsers []User `json:"playing_users"`
 }
 
+type BoothPassword struct {
+	ID 	 int 	`json:"id"`
+	Password string `json:"string"`
+}
+
 type BoothImage struct {
 	ID      int    `json:"id"`
 	BoothID int    `json:"booth_id"`
